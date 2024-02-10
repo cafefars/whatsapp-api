@@ -1,9 +1,44 @@
 const { Client, LocalAuth } = require('whatsapp-web.js')
 const fs = require('fs')
+var mime = require('mime-types');
 const path = require('path')
 const sessions = new Map()
-const { baseWebhookURL, sessionFolderPath, maxAttachmentSize, setMessagesAsSeen, webVersion, webVersionCacheType, recoverSessions } = require('./config')
+const { baseWebhookURL, sessionFolderPath, maxAttachmentSize, setMessagesAsSeen, webVersion, webVersionCacheType, recoverSessions, bucket, endpoint, accessKeyId, secretAccessKey   } = require('./config')
 const { triggerWebhook, waitForNestedObject, checkIfEventisEnabled } = require('./utils')
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const s3 = new S3Client({
+    region: 'default',
+    endpoint: endpoint,
+    credentials: {
+        accessKeyId: accessKeyId,
+        secretAccessKey: secretAccessKey,
+    },
+});
+
+async function uploadMediaToS3(attachmentData, dst,sessionWebhook, sessionId) {
+    const uploadParams = {
+        Bucket: bucket,
+       // ACL: 'private-read',
+        Key: dst,
+        Body: Buffer.from(attachmentData, 'base64'),
+    };
+
+    try {
+        const data = await s3.send(new PutObjectCommand(uploadParams));
+        console.log('Media Upload Success:', data);
+        return uploadParams.Key; // Assuming you want to return the uploaded file's key
+    } catch (err) {
+        console.error('Media Upload Error:', err);
+	triggerWebhook(sessionWebhook, sessionId, 'AWS S3 Error',err);
+        throw err; // Rethrow the error to handle it where this function is called
+    }
+}
+
+
+
+
+
+
 
 // Function to validate if the session is ready
 const validateSession = async (sessionId) => {
@@ -227,26 +262,55 @@ const initializeEvents = (client, sessionId) => {
       })
     })
 
-  checkIfEventisEnabled('message')
-    .then(_ => {
-      client.on('message', async (message) => {
-        triggerWebhook(sessionWebhook, sessionId, 'message', { message })
-        if (message.hasMedia && message._data?.size < maxAttachmentSize) {
-          // custom service event
-          checkIfEventisEnabled('media').then(_ => {
-            message.downloadMedia().then(messageMedia => {
-              triggerWebhook(sessionWebhook, sessionId, 'media', { messageMedia, message })
-            }).catch(e => {
-              console.log('Download media error:', e.message)
-            })
-          })
-        }
-        if (setMessagesAsSeen) {
-          const chat = await message.getChat()
-          chat.sendSeen()
-        }
-      })
-    })
+
+////
+checkIfEventisEnabled('message').then(_ => {
+	
+    client.on('message', async (message) => {
+    const presence = await client.sendPresenceUnavailable()
+    if((message.type !='chat' && message.type !='location' && message.type !='vcard' && message.type !='poll_creation' ) && (message._data?.size < maxAttachmentSize))
+    {
+	    
+        let file_type = '';
+        let file_id = '';
+        await checkIfEventisEnabled('media').then(_ => {
+            message.downloadMedia().then(async (messageMedia) => {
+               
+
+                // Custom service event for media
+                try {
+                    const attachmentData = await message.downloadMedia();
+		 // triggerWebhook(sessionWebhook, sessionId, 'Type', );
+                    file_type =mime.extension(message._data.mimetype);
+                    file_id = message._data.id.id;
+
+                
+                    // Upload media to AWS S3
+                    const uploadedFileKey = await uploadMediaToS3(attachmentData.data, file_id + '.' + file_type,sessionWebhook, sessionId);
+			
+                	message._data.type=file_id + '.' + file_type;
+                 	triggerWebhook(sessionWebhook, sessionId, 'media',{ message })
+                    // console.log('Upload to S3 successful. File key:', uploadedFileKey);
+                    // Trigger webhook with media details
+                } catch (e) {
+                    console.error('Error in processing media:', e.message);
+                }
+            });
+        });
+
+       
+    
+    }
+    else //if(message.type =='chat' | pol | location | vcard)
+    {
+    	 triggerWebhook(sessionWebhook, sessionId, 'message', { message });
+    }
+    if (setMessagesAsSeen) {
+                const chat = await message.getChat();
+                chat.sendSeen();
+            }
+    });
+});
 
   checkIfEventisEnabled('message_ack')
     .then(_ => {

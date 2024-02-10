@@ -1,5 +1,7 @@
 # Use the official Node.js Alpine image as the base image
+
 FROM node:20-alpine
+
 
 # Set the working directory
 WORKDIR /usr/src/app
@@ -18,6 +20,7 @@ RUN set -x \
 
 # Copy package.json and package-lock.json to the working directory
 COPY package*.json ./
+RUN npm install
 
 # Install the dependencies
 RUN npm ci --only=production --ignore-scripts

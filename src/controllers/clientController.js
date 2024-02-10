@@ -65,63 +65,164 @@ const sendMessage = async (req, res) => {
       }
     }
   */
-
+let isRegistered
+let extractedNumbers
   try {
-    const { chatId, content, contentType, options } = req.body
+    let {chatId} = req.body
+    const {content, contentType, options } = req.body
     const client = sessions.get(req.params.sessionId)
-
+   // const presence = await client.sendPresenceAvailable()
     let messageOut
-    switch (contentType) {
-      case 'string':
-        if (options?.media) {
+
+   
+    //check if chat Id is registered in whatsapp
+    
+    if(chatId.includes('@g.us')) //is group
+    {
+      
+      isRegistered=true
+      extractedNumbers = chatId.match(/[0-9]+|@g\.us/g).join('')
+      chatId = extractedNumbers
+    }
+    else  
+    {
+     
+    extractedNumbers = chatId.match(/[0-9]+|@c\.us/g).join('')
+      chatId = extractedNumbers
+      isRegistered = await client.isRegisteredUser(chatId)
+    }
+    if(isRegistered)
+    {
+        switch (contentType) {
+          case 'string':
+           if (options?.media) {
+
           const media = options.media
           media.filename = null
           media.filesize = null
           options.media = new MessageMedia(media.mimetype, media.data, media.filename, media.filesize)
+            }
+            if(chatId.includes('@g.us')) 
+            {
+               messageOut = await client.sendMessage(chatId, content, options)
+            }
+            else
+            {
+              const numberId = await client.getNumberId(chatId);
+              messageOut = await client.sendMessage(numberId._serialized, content, options)
+            }
+            break
+          case 'MessageMediaFromURL': {
+
+            
+            const messageMediaFromURL = await MessageMedia.fromUrl(content, { unsafeMime: true })
+            
+            if(chatId.includes('@g.us')) 
+            {
+              messageOut = await client.sendMessage(chatId, messageMediaFromURL, options)
+            }
+            else
+            {
+              const numberId = await client.getNumberId(chatId);
+              messageOut = await client.sendMessage(numberId._serialized, messageMediaFromURL, options)
+            }
+            break
+          }
+          case 'MessageMedia': {
+            const messageMedia = new MessageMedia(content.mimetype, content.data, content.filename, content.filesize)
+            if(chatId.includes('@g.us')) 
+            {
+              messageOut = await client.sendMessage(chatId, messageMedia, options)
+            }
+            else
+            {
+              const numberId = await client.getNumberId(chatId);
+              messageOut = await client.sendMessage(numberId._serialized, messageMedia, options)
+            }
+            break
+          }
+          case 'Location': {
+            const location = new Location(content.latitude, content.longitude, content.description)
+
+            if(chatId.includes('@g.us')) 
+            {
+              messageOut = await client.sendMessage(chatId, location, options)
+            }
+            else
+            {
+              const numberId = await client.getNumberId(chatId);
+              messageOut = await client.sendMessage(numberId._serialized, location, options)
+            }
+            break
+          }
+          case 'Buttons': {
+            const buttons = new Buttons(content.body, content.buttons, content.title, content.footer)
+            if(chatId.includes('@g.us')) 
+            {
+              messageOut = await client.sendMessage(chatId, buttons, options)
+            }
+            else
+            {
+               const numberId = await client.getNumberId(chatId);
+                messageOut = await client.sendMessage(numberId._serialized, buttons, options)
+            }
+            break
+          }
+          case 'List': {
+            const list = new List(content.body, content.buttonText, content.sections, content.title, content.footer)
+            if(chatId.includes('@g.us')) 
+            {
+              messageOut = await client.sendMessage(chatId, list, options)
+            }
+            else
+            {
+              const numberId = await client.getNumberId(chatId);
+              messageOut = await client.sendMessage(numberId._serialized, list, options)
+            }
+            break
+          }
+          case 'Contact': {
+            const contact = await client.getContactById(typeof content.contactId === 'number' ? content.contactId + '@c.us' : content.contactId)
+            if(chatId.includes('@g.us')) 
+            {
+              messageOut = await client.sendMessage(chatId, contact, options)
+            }
+            else
+            {
+              const numberId = await client.getNumberId(chatId);
+              messageOut = await client.sendMessage(numberId._serialized, contact, options)
+            }
+            break
+          }
+          case 'Poll': {
+            const poll = new Poll(content.pollName, content.pollOptions, content.options)
+            if(chatId.includes('@g.us')) 
+            {
+              messageOut = await client.sendMessage(chatId, poll, options)
+            }
+            else
+            {
+              const numberId = await client.getNumberId(chatId);
+              messageOut = await client.sendMessage(numberId._serialized, poll, options)
+            }
+            break
+          }
+          default:
+            return sendErrorResponse(res, 404, 'contentType invalid, must be string, MessageMedia, MessageMediaFromURL, Location, Buttons, List, Contact or Poll')
+
         }
-        messageOut = await client.sendMessage(chatId, content, options)
-        break
-      case 'MessageMediaFromURL': {
-        const messageMediaFromURL = await MessageMedia.fromUrl(content, { unsafeMime: true })
-        messageOut = await client.sendMessage(chatId, messageMediaFromURL, options)
-        break
-      }
-      case 'MessageMedia': {
-        const messageMedia = new MessageMedia(content.mimetype, content.data, content.filename, content.filesize)
-        messageOut = await client.sendMessage(chatId, messageMedia, options)
-        break
-      }
-      case 'Location': {
-        const location = new Location(content.latitude, content.longitude, content.description)
-        messageOut = await client.sendMessage(chatId, location, options)
-        break
-      }
-      case 'Buttons': {
-        const buttons = new Buttons(content.body, content.buttons, content.title, content.footer)
-        messageOut = await client.sendMessage(chatId, buttons, options)
-        break
-      }
-      case 'List': {
-        const list = new List(content.body, content.buttonText, content.sections, content.title, content.footer)
-        messageOut = await client.sendMessage(chatId, list, options)
-        break
-      }
-      case 'Contact': {
-        const contact = await client.getContactById(typeof content.contactId === 'number' ? content.contactId + '@c.us' : content.contactId)
-        messageOut = await client.sendMessage(chatId, contact, options)
-        break
-      }
-      case 'Poll': {
-        const poll = new Poll(content.pollName, content.pollOptions, content.options)
-        messageOut = await client.sendMessage(chatId, poll, options)
-        break
-      }
-      default:
-        return sendErrorResponse(res, 404, 'contentType invalid, must be string, MessageMedia, MessageMediaFromURL, Location, Buttons, List, Contact or Poll')
+      
+    
+        res.json({ success: true, message: messageOut })
+    } //if isRegistered
+    else
+    {
+        res.json({ success: false, message: '404' })
     }
 
-    res.json({ success: true, message: messageOut })
+        
   } catch (error) {
+     res.json({ success: false, message: error.message })
     console.log(error)
     sendErrorResponse(res, 500, error.message)
   }
