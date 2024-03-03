@@ -1,6 +1,8 @@
 const { sessions } = require('../sessions')
 const { sendErrorResponse } = require('../utils')
-
+const { bucket, endpoint, accessKeyId, secretAccessKey   } = require('../config')
+var mime = require('mime-types')
+const path = require('path')
 /**
  * Get message by its ID from a given chat using the provided client.
  * @async
@@ -17,7 +19,33 @@ const _getMessageById = async (client, messageId, chatId) => {
   const message = messages.find((message) => { return message.id.id === messageId })
   return message
 }
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const s3 = new S3Client({
+    region: 'default',
+    endpoint: endpoint,
+    credentials: {
+        accessKeyId: accessKeyId,
+        secretAccessKey: secretAccessKey,
+    },
+});
+async function uploadMediaToS3(attachmentData, dst) {
+    const uploadParams = {
+        Bucket: bucket,
+       // ACL: 'private-read',
+        Key: dst,
+        Body: Buffer.from(attachmentData, 'base64'),
+    };
 
+    try {
+        const data = await s3.send(new PutObjectCommand(uploadParams));
+        console.log('Media Upload Success:', data);
+        return uploadParams.Key; // Assuming you want to return the uploaded file's key
+    } catch (err) {
+        console.error('Media Upload Error:', err);
+	//triggerWebhook(sessionWebhook, sessionId, 'AWS S3 Error',err);
+        throw err; // Rethrow the error to handle it where this function is called
+    }
+}
 /**
  * Gets information about a message's class.
  * @async
@@ -85,7 +113,19 @@ const downloadMedia = async (req, res) => {
     const message = await _getMessageById(client, messageId, chatId)
     if (!message) { throw new Error('Message not Found') }
     const messageMedia = await message.downloadMedia(everyone)
-    res.json({ success: true, messageMedia })
+    /////
+    let f_type = '';
+    let f_id = '';
+    f_type =mime.extension(messageMedia.mimetype);
+    f_id = messageId;
+   // Upload media to AWS S3
+   const uploadedFileKey = await uploadMediaToS3(messageMedia.data, f_id + '.' + f_type);
+    if(uploadedFileKey==f_id + '.' + f_type)
+    {
+      res.json({ success: true, 'messageMedia':uploadedFileKey })
+    }
+    ////
+   // res.json({ success: true, messageMedia })
   } catch (error) {
     sendErrorResponse(res, 500, error.message)
   }

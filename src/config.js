@@ -19,6 +19,8 @@ const bucket = process.env.BUCKET
 const endpoint = process.env.ENDPOINT
 const accessKeyId = process.env.ACCESSKEYID
 const secretAccessKey = process.env.SECRETACCESSKEY
+//const directupload = (process.env.DIRECTUPLOAD  || '').toLowerCase() === 'false'
+const directupload = (process.env.DIRECTUPLOAD).toLowerCase()
 module.exports = {
   sessionFolderPath,
   enableLocalCallbackExample,
@@ -36,5 +38,6 @@ module.exports = {
   bucket,
   endpoint,
   accessKeyId,
-  secretAccessKey
+  secretAccessKey,
+  directupload
 }

@@ -5,15 +5,13 @@
     "description": "API Wrapper for WhatsAppWebJS",
     "version": "1.0.0"
   },
+ "host": "",
   "servers": [
     {
       "url": "",
       "description": ""
     },
-    {
-      "url": "http://localhost:3000",
-      "description": "localhost"
-    }
+  
   ],
   "tags": [
     {

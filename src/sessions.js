@@ -3,7 +3,7 @@ const fs = require('fs')
 var mime = require('mime-types');
 const path = require('path')
 const sessions = new Map()
-const { baseWebhookURL, sessionFolderPath, maxAttachmentSize, setMessagesAsSeen, webVersion, webVersionCacheType, recoverSessions, bucket, endpoint, accessKeyId, secretAccessKey   } = require('./config')
+const { baseWebhookURL, sessionFolderPath, maxAttachmentSize, setMessagesAsSeen, webVersion, webVersionCacheType, recoverSessions, bucket, endpoint, accessKeyId, secretAccessKey,directupload } = require('./config')
 const { triggerWebhook, waitForNestedObject, checkIfEventisEnabled } = require('./utils')
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const s3 = new S3Client({
@@ -129,7 +129,8 @@ const setupSession = (sessionId) => {
         // headless: false,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage']
       },
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36',
+      //userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.67 Safari/537.36',
       authStrategy: localAuth
     }
 
@@ -268,26 +269,30 @@ checkIfEventisEnabled('message').then(_ => {
 	
     client.on('message', async (message) => {
     const presence = await client.sendPresenceUnavailable()
-    if((message.type !='chat' && message.type !='location' && message.type !='vcard' && message.type !='poll_creation' ) && (message._data?.size < maxAttachmentSize))
+	    
+    if (message.hasMedia && message._data?.size < maxAttachmentSize)
     {
 	    
         let file_type = '';
         let file_id = '';
-        await checkIfEventisEnabled('media').then(_ => {
-            message.downloadMedia().then(async (messageMedia) => {
+       // await checkIfEventisEnabled('media').then(_ => {
+           // message.downloadMedia().then(async (messageMedia) => {
                
 
                 // Custom service event for media
                 try {
-                    const attachmentData = await message.downloadMedia();
+                    
 		 // triggerWebhook(sessionWebhook, sessionId, 'Type', );
                     file_type =mime.extension(message._data.mimetype);
                     file_id = message._data.id.id;
 
                 
                     // Upload media to AWS S3
+			console.log('directupload=' + directupload)
+		   if(directupload === true){
+		    const attachmentData = await message.downloadMedia();
                     const uploadedFileKey = await uploadMediaToS3(attachmentData.data, file_id + '.' + file_type,sessionWebhook, sessionId);
-			
+		   }
                 	message._data.type=file_id + '.' + file_type;
                  	triggerWebhook(sessionWebhook, sessionId, 'media',{ message })
                     // console.log('Upload to S3 successful. File key:', uploadedFileKey);
@@ -295,8 +300,8 @@ checkIfEventisEnabled('message').then(_ => {
                 } catch (e) {
                     console.error('Error in processing media:', e.message);
                 }
-            });
-        });
+          //  });
+      //  });
 
        
     
