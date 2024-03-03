@@ -6,13 +6,6 @@
     "version": "1.0.0"
   },
  "host": "",
-  "servers": [
-    {
-      "url": "",
-      "description": ""
-    },
-  
-  ],
   "tags": [
     {
       "name": "Session",
