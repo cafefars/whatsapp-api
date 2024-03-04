@@ -9,7 +9,8 @@ WORKDIR /usr/src/app
 # Install Chromium
 ENV CHROME_BIN="/usr/bin/chromium-browser" \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD="true" \
-    NODE_ENV="production"
+    #NODE_ENV="production"
+    NODE_ENV="development"
 RUN set -x \
     && apk update \
     && apk upgrade \
